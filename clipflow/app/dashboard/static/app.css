@@ -1,0 +1,21 @@
+.soon { opacity: .45; cursor: not-allowed; }
+.soon small { font-size: .65em; }
+.banner-warn { background: #fff3cd; color: #664d03; border: 1px solid #ffe69c; padding: .6rem 1rem; border-radius: .4rem; }
+.flash { background: var(--pico-secondary-background); color: var(--pico-secondary-inverse); padding: .6rem 1rem; border-radius: .4rem; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.stat { margin: 0; padding: .75rem; display: flex; flex-direction: column; }
+.stat-num { font-size: 1.8rem; font-weight: 700; }
+.filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.filters > * { flex: 1 1 140px; margin: 0; }
+.actions { white-space: nowrap; }
+.actions form { display: inline; margin: 0; }
+button.small { padding: .2rem .5rem; font-size: .75rem; margin: 0 .15rem 0 0; width: auto; }
+.badge { padding: .1rem .45rem; border-radius: .3rem; font-size: .75rem; background: #e9ecef; color: #333; }
+.badge-selected { background: #cfe2ff; color: #084298; }
+.badge-joined { background: #d1e7dd; color: #0f5132; }
+.badge-paused { background: #fff3cd; color: #664d03; }
+.badge-ended { background: #f8d7da; color: #842029; }
+.flag { font-size: .7rem; padding: .05rem .3rem; margin-left: .3rem; }
+.pre { white-space: pre-wrap; }
+.pager { display: flex; justify-content: space-between; align-items: center; }
+td, th { font-size: .9rem; }

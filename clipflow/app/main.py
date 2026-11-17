@@ -160,7 +160,7 @@ def scout_top(limit: int, platform: str | None) -> int:
     if not rows:
         print("no scored campaigns (run scout-fetch or scout-score)")
         return 0
-    print("rank | score | name | $cpm/1K | est $/clip | $left | days_left | creators | reasons")
+    print("rank | score | type | name | $cpm/1K | est $/clip | $left | days_left | creators | reasons")
     for i, c in enumerate(rows, 1):
         name = c.name if len(c.name) <= 40 else c.name[:39] + "…"
         cpm = f"${c.cpm_rate:g}" if c.cpm_rate is not None else "-"
@@ -169,7 +169,122 @@ def scout_top(limit: int, platform: str | None) -> int:
         days = f"{c.days_left:g}" if c.days_left is not None else "-"
         creators = c.creators_count if c.creators_count is not None else "-"
         reasons = "; ".join(c.score_reasons or [])
-        print(f"{i} | {c.score:.1f} | {name} | {cpm} | {est} | {left} | {days} | {creators} | {reasons}")
+        ctype = c.campaign_type or "-"
+        print(f"{i} | {c.score:.1f} | {ctype} | {name} | {cpm} | {est} | {left} | {days} | {creators} | {reasons}")
+    return 0
+
+
+def campaign_set(campaign_id: int, status: str, notes: str | None) -> int:
+    """Manually set a campaign's status (and notes)."""
+    from app.db import get_session, init_db
+    from app.db.enums import CampaignStatus
+    from app.db.models import Campaign
+
+    try:
+        new_status = CampaignStatus(status)
+    except ValueError:
+        print(f"error: unknown status '{status}' (use: {', '.join(s.value for s in CampaignStatus)})")
+        return 1
+    ensure_dirs()
+    init_db()
+    with get_session() as s:
+        c = s.get(Campaign, campaign_id)
+        if c is None:
+            print(f"error: no campaign with id {campaign_id}")
+            return 1
+        c.status = new_status
+        if notes is not None:
+            c.notes = notes
+        name = c.name
+    print(f"#{campaign_id} {name} → {new_status.value}")
+    return 0
+
+
+def campaign_list(status: str | None) -> int:
+    """List campaigns, optionally filtered by status."""
+    from sqlalchemy import select
+
+    from app.db import get_session, init_db
+    from app.db.enums import CampaignStatus
+    from app.db.models import Campaign
+
+    ensure_dirs()
+    init_db()
+    q = select(Campaign).order_by(Campaign.score.desc(), Campaign.id)
+    if status:
+        try:
+            q = q.where(Campaign.status == CampaignStatus(status))
+        except ValueError:
+            print(f"error: unknown status '{status}'")
+            return 1
+    with get_session() as s:
+        rows = s.scalars(q).all()
+    print("id | status | score | name | url")
+    for c in rows:
+        print(f"{c.id} | {c.status.value} | {(c.score or 0):.1f} | {c.name} | {c.url}")
+    if not rows:
+        print("(none)")
+    return 0
+
+
+def scout_report(no_send: bool) -> int:
+    """Build (and optionally send) the weekly report."""
+    from app.db import get_session, init_db
+    from app.scout.report import build_report, send_weekly_report, strip_tags
+
+    ensure_dirs()
+    init_db()
+    if no_send:
+        with get_session() as s:
+            text, csv_path = build_report(s)
+        print(strip_tags(text))
+        print(f"CSV: {csv_path}")
+        return 0
+    ok = send_weekly_report()
+    print("SENT" if ok else "NOT SENT")
+    return 0
+
+
+def run_scheduler() -> int:
+    """Start the blocking scheduler."""
+    from app.scheduler.jobs import build_scheduler, next_runs
+
+    ensure_dirs()
+    log = get_logger("clipflow.scheduler")
+    sched = build_scheduler()
+    for job_id, when in next_runs(sched):
+        log.info("job %s next run: %s", job_id, when)
+    try:
+        sched.start()
+    except (KeyboardInterrupt, SystemExit):
+        log.info("scheduler stopped")
+    return 0
+
+
+def dashboard(host: str, port: int) -> int:
+    """Run the web dashboard with uvicorn."""
+    if host not in ("127.0.0.1", "localhost", "::1") and not settings.DASHBOARD_PASSWORD:
+        print(f"Refusing to start on {host}: set DASHBOARD_PASSWORD in .env before exposing the dashboard "
+              "(or use --host 127.0.0.1).")
+        return 1
+    import uvicorn
+
+    from app.dashboard.app import create_app
+    from app.db import init_db
+
+    ensure_dirs()
+    init_db()
+    uvicorn.run(create_app(), host=host, port=port, log_level="info")
+    return 0
+
+
+def run_job(name: str) -> int:
+    """Run one scheduler job now."""
+    from app.scheduler.jobs import JOBS
+
+    ensure_dirs()
+    JOBS[name]()
+    print(f"job {name} done")
     return 0
 
 
@@ -189,7 +304,33 @@ def main(argv=None) -> int:
     top = sub.add_parser("scout-top", help="show best-scored campaigns")
     top.add_argument("--limit", type=int, default=10)
     top.add_argument("--platform", default=None)
+    cset = sub.add_parser("campaign-set", help="set a campaign's status")
+    cset.add_argument("id", type=int)
+    cset.add_argument("status")
+    cset.add_argument("--notes", default=None)
+    clist = sub.add_parser("campaign-list", help="list campaigns")
+    clist.add_argument("--status", default=None)
+    rep = sub.add_parser("scout-report", help="weekly campaign report")
+    rep.add_argument("--no-send", action="store_true")
+    sub.add_parser("run-scheduler", help="run scheduled jobs (blocking)")
+    rj = sub.add_parser("run-job", help="run one job now")
+    rj.add_argument("job", choices=["daily_scout", "weekly_report"])
+    dash = sub.add_parser("dashboard", help="run the web dashboard")
+    dash.add_argument("--host", default="127.0.0.1")
+    dash.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
+    if args.command == "dashboard":
+        return dashboard(args.host, args.port)
+    if args.command == "campaign-set":
+        return campaign_set(args.id, args.status, args.notes)
+    if args.command == "campaign-list":
+        return campaign_list(args.status)
+    if args.command == "scout-report":
+        return scout_report(args.no_send)
+    if args.command == "run-scheduler":
+        return run_scheduler()
+    if args.command == "run-job":
+        return run_job(args.job)
     if args.command == "scout-fetch":
         return scout_fetch(args.provider, args.dry_run)
     if args.command == "scout-score":

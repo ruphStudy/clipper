@@ -26,6 +26,7 @@ class ScoreConfig:
 
     platforms: list[str] = field(default_factory=lambda: csv_list(settings.MY_PLATFORMS))
     niches: list[str] = field(default_factory=lambda: csv_list(settings.MY_NICHES))
+    campaign_types: list[str] = field(default_factory=lambda: csv_list(settings.MY_CAMPAIGN_TYPES))
     typical_views: float = field(default_factory=lambda: float(settings.TYPICAL_VIEWS))
     min_cpm: float = field(default_factory=lambda: float(settings.MIN_CPM))
     min_budget_left: float = field(default_factory=lambda: float(settings.MIN_BUDGET_LEFT))
@@ -107,6 +108,8 @@ def score_campaign(campaign: Campaign, snapshots: Iterable[CampaignSnapshot] = (
     filters: list[str] = []
     if campaign.is_live is False or campaign.status == CampaignStatus.ended:
         filters.append("ended / not live")
+    if cfg.campaign_types and (campaign.campaign_type or "").lower() not in cfg.campaign_types:
+        filters.append("not a clipping campaign")
     if cfg.platforms and not overlap:
         filters.append("not on your platforms")
     if budget_left < cfg.min_budget_left:

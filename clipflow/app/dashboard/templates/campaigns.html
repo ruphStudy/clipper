@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Campaigns{% endblock %}
+{% block content %}
+<h2>Campaigns <small>({{ total }})</small></h2>
+<form method="get" action="/campaigns" class="filters">
+  <select name="status" aria-label="Status">
+    <option value="" {% if not f.status %}selected{% endif %}>active (not ended)</option>
+    <option value="all" {% if f.status == 'all' %}selected{% endif %}>all</option>
+    {% for s in statuses %}<option value="{{ s }}" {% if f.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="type" aria-label="Type">
+    <option value="all" {% if f.type == 'all' %}selected{% endif %}>all types</option>
+    {% for t in types %}<option value="{{ t }}" {% if f.type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+  </select>
+  <input type="search" name="q" value="{{ f.q }}" placeholder="Search name or brand" aria-label="Search">
+  <select name="sort" aria-label="Sort">
+    {% for s in sorts %}<option value="{{ s }}" {% if f.sort == s %}selected{% endif %}>sort: {{ s }}</option>{% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+</form>
+<div class="overflow-auto">
+<table class="striped">
+  <thead>
+    <tr><th>Score</th><th>Name</th><th>$/1K</th><th>~$/clip</th><th>$ left</th><th>Days</th>
+        <th>Creators</th><th>Platforms</th><th>Status</th><th>Actions</th></tr>
+  </thead>
+  <tbody>
+  {% for c in rows %}
+    <tr>
+      <td><strong>{{ "%.1f" | format(c.score or 0) }}</strong></td>
+      <td><a href="/campaigns/{{ c.id }}">{{ c.name }}</a>
+        {% if c.requires_application %}<mark class="flag">needs app</mark>{% endif %}</td>
+      <td>{{ c.cpm_rate | money(2) if c.cpm_rate is not none else (c.payout_type or '–') }}</td>
+      <td>{{ c.est_per_clip | money(2) }}</td>
+      <td>{{ c.budget_left | money }}</td>
+      <td>{{ c.days_left | num }}</td>
+      <td>{{ c.creators_count if c.creators_count is not none else '–' }}</td>
+      <td><small>{{ (c.platforms or []) | join(', ') }}</small></td>
+      <td><span class="badge badge-{{ c.status.value }}">{{ c.status.value }}</span></td>
+      <td class="actions">
+        {% for label, st in [('Select', 'selected'), ('Join', 'joined'), ('Ignore', 'ended')] %}
+        <form method="post" action="/campaigns/{{ c.id }}/status">
+          <input type="hidden" name="status" value="{{ st }}">
+          <input type="hidden" name="back" value="{{ back }}">
+          <button type="submit" class="outline secondary small" {% if c.status.value == st %}disabled{% endif %}>{{ label }}</button>
+        </form>
+        {% endfor %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="10">No campaigns match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}<a href="?status={{ f.status }}&type={{ f.type }}&q={{ f.q | urlencode }}&sort={{ f.sort }}&page={{ page - 1 }}">← Prev</a>{% endif %}
+  <span>Page {{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a href="?status={{ f.status }}&type={{ f.type }}&q={{ f.q | urlencode }}&sort={{ f.sort }}&page={{ page + 1 }}">Next →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     MY_PLATFORMS: str = "youtube,instagram"
     MY_NICHES: str = ""
+    MY_CAMPAIGN_TYPES: str = "clipping"
     TYPICAL_VIEWS: int = 3000
     MIN_CPM: float = 0.3
     MIN_BUDGET_LEFT: float = 500

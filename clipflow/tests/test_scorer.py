@@ -17,6 +17,7 @@ CFG = ScoreConfig(platforms=["youtube", "instagram"], niches=[], typical_views=3
 
 def camp(**kw):
     base = dict(external_id="e1", name="Podcast Clips", url="u", brand="PodCo", payout_type="cpm",
+                campaign_type="clipping",
                 cpm_rate=2.0, budget_total=20000.0, budget_spent=10001.0, budget_left=9999.0,
                 creators_count=40, platforms=["youtube", "tiktok"], is_verified=True,
                 description="Clip the show", requires_application=True, is_live=True,
@@ -72,6 +73,12 @@ def test_hard_filters(overrides, snaps, reason):
     s = [snap(spent, NOW - timedelta(hours=h)) for spent, h in snaps]
     r = score_campaign(c, s, CFG, NOW)
     assert r.score == 0 and reason in r.reasons and r.breakdown == {}
+
+
+def test_ugc_filtered_clipping_scored():
+    ugc = score_campaign(camp(campaign_type="ugc"), [], CFG, NOW)
+    assert ugc.score == 0 and "not a clipping campaign" in ugc.reasons
+    assert score_campaign(camp(campaign_type="clipping"), [], CFG, NOW).score > 0
 
 
 def test_pool_campaign_not_filtered_by_cpm():

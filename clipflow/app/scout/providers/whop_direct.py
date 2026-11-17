@@ -89,7 +89,7 @@ def map_campaign(c: dict, category: Optional[str] = None) -> CampaignDTO:
         name=_s(str(c["title"]).strip()),
         url=CAMPAIGN_URL.format(id=c["id"]),
         brand=_s(c.get("brand")),
-        campaign_type=category,
+        campaign_type=_s(c.get("campaignType")) or category,
         payout_type=payout_type,
         platforms=c.get("platforms") or [],
         cpm_rate=_f(c.get("payoutSortRaw")) if payout_type == "cpm" else None,
@@ -153,7 +153,12 @@ class WhopDirectProvider(Provider):
                     except ScoutError as exc:
                         log.warning("skipping campaign: %s", exc)
                         continue
-                    dtos.setdefault(dto.external_id, dto)
+                    prev = dtos.get(dto.external_id)
+                    if prev is None:
+                        dtos[dto.external_id] = dto
+                    elif category == "clipping":
+                        # Listed under both: clipping wins (we automate clipping).
+                        prev.campaign_type = "clipping"
                     raw.append({"category": category, **{k: v for k, v in c.items() if k not in _DROP_KEYS}})
         if not dtos:
             raise ScoutError("discover pages parsed but contained no campaigns")

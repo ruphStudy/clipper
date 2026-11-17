@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h2>Overview</h2>
+<div class="stats">
+  {% for label, value in stats %}
+  <article class="stat"><span class="stat-num">{{ value }}</span><span>{{ label }}</span></article>
+  {% endfor %}
+</div>
+<table>
+  <tbody>
+    <tr><th scope="row">Last scout run</th><td>{{ last_scout | local_time }}</td></tr>
+    <tr><th scope="row">Last weekly report</th><td>{{ last_report | local_time }}</td></tr>
+  </tbody>
+</table>
+<form method="post" action="/actions/scout">
+  <button type="submit">Run scout now</button>
+  <small>Fetches public campaigns and re-scores them (takes a few seconds).</small>
+</form>
+{% endblock %}

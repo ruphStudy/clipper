@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ClipFlow{% endblock %} · ClipFlow</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul><li><strong>ClipFlow</strong></li></ul>
+      <ul>
+        <li><a href="/" {% if nav == 'home' %}aria-current="page"{% endif %}>Home</a></li>
+        <li><a href="/campaigns" {% if nav == 'campaigns' %}aria-current="page"{% endif %}>Campaigns</a></li>
+        {% for label in ['Sources', 'Clips', 'Posts', 'Settings'] %}
+        <li><span class="soon" title="coming soon">{{ label }} <small>soon</small></span></li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </header>
+  <main class="container">
+    {% if no_password %}
+    <p class="banner-warn" role="alert">Set DASHBOARD_PASSWORD before exposing this dashboard</p>
+    {% endif %}
+    {% include "_flash.html" %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
