@@ -40,8 +40,11 @@ def default_engine() -> Engine:
 
 def init_db(engine: Optional[Engine] = None) -> Engine:
     """Create all tables."""
+    from app.db.migrate import auto_migrate
+
     engine = engine or default_engine()
     Base.metadata.create_all(engine)
+    auto_migrate(engine)
     return engine
 
 

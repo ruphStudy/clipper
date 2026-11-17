@@ -7,7 +7,8 @@ from app.db import get_engine, get_session, init_db
 from app.db.enums import Platform, PostStatus
 from app.db.models import Account, Campaign, Clip, Post, Source
 
-TABLES = {"accounts", "campaigns", "sources", "clips", "posts", "post_stats", "app_settings"}
+TABLES = {"accounts", "campaigns", "campaign_snapshots", "sources", "clips", "posts", "post_stats",
+          "app_settings"}
 
 
 @pytest.fixture

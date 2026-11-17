@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     INSTAGRAM_ACCESS_TOKEN: str = ""
     INSTAGRAM_USER_ID: str = ""
 
+    APIFY_TOKEN: str = ""
+    APIFY_ACTOR: str = "fayoussef~whop-clipping-campaigns-scraper"
+
+    MY_PLATFORMS: str = "youtube,instagram"
+    MY_NICHES: str = ""
+    TYPICAL_VIEWS: int = 3000
+    MIN_CPM: float = 0.3
+    MIN_BUDGET_LEFT: float = 500
+    MIN_DAYS_LEFT: float = 3
+
     MAX_DISK_GB: int = 20
 
 
@@ -42,6 +52,11 @@ def ensure_dirs() -> None:
     """Create runtime directories if missing."""
     for d in (settings.DATA_DIR, settings.DOWNLOAD_DIR, settings.CLIPS_DIR, settings.LOG_DIR):
         Path(d).mkdir(parents=True, exist_ok=True)
+
+
+def csv_list(value: str) -> list[str]:
+    """Split a comma list into lowercase, trimmed, non-empty items."""
+    return [v.strip().lower() for v in (value or "").split(",") if v.strip()]
 
 
 def masked(value: str) -> str:

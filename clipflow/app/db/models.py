@@ -3,7 +3,20 @@ from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    true,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.db.enums import CampaignStatus, ClipStatus, Platform, PostStatus, SourceKind, SourceStatus
@@ -79,6 +92,20 @@ class Campaign(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    payout_type: Mapped[Optional[str]] = mapped_column(String(32))
+    requires_application: Mapped[Optional[bool]] = mapped_column(Boolean)
+    is_verified: Mapped[Optional[bool]] = mapped_column(Boolean)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    budget_spent: Mapped[Optional[float]] = mapped_column(Float)
+    progress_pct: Mapped[Optional[float]] = mapped_column(Float)
+    funded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    is_live: Mapped[Optional[bool]] = mapped_column(Boolean, default=True, server_default=true())
+    score_breakdown: Mapped[Optional[dict]] = mapped_column(JSON)
+    score_reasons: Mapped[Optional[list]] = mapped_column(JSON)
+    est_per_clip: Mapped[Optional[float]] = mapped_column(Float)
+    burn_per_day: Mapped[Optional[float]] = mapped_column(Float)
+    days_left: Mapped[Optional[float]] = mapped_column(Float)
+    scored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     sources: Mapped[list["Source"]] = relationship(
         back_populates="campaign", cascade="all, delete-orphan", passive_deletes=True
@@ -86,6 +113,25 @@ class Campaign(Base):
     clips: Mapped[list["Clip"]] = relationship(
         back_populates="campaign", cascade="all, delete-orphan", passive_deletes=True
     )
+    snapshots: Mapped[list["CampaignSnapshot"]] = relationship(
+        back_populates="campaign", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class CampaignSnapshot(Base):
+    """Point-in-time budget/creator numbers for burn-rate tracking."""
+
+    __tablename__ = "campaign_snapshots"
+    __table_args__ = (Index("ix_campaign_snapshots_campaign_captured", "campaign_id", "captured_at"),)
+
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"))
+    budget_left: Mapped[Optional[float]] = mapped_column(Float)
+    budget_spent: Mapped[Optional[float]] = mapped_column(Float)
+    creators_count: Mapped[Optional[int]] = mapped_column(Integer)
+    progress_pct: Mapped[Optional[float]] = mapped_column(Float)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    campaign: Mapped[Campaign] = relationship(back_populates="snapshots")
 
 
 class Source(Base):
