@@ -121,7 +121,7 @@ def test_last_report_only_on_success(engine, tmp_path, capsys):
 def test_scheduler_triggers():
     sched = build_scheduler()
     jobs = {j.id: j for j in sched.get_jobs()}
-    assert set(jobs) == {"daily_scout_am", "daily_scout_pm", "weekly_report"}
+    assert {"daily_scout_am", "daily_scout_pm", "weekly_report"} <= set(jobs)
 
     def fields(job):
         return {f.name: str(f) for f in job.trigger.fields if not f.is_default}

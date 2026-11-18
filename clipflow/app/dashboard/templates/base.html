@@ -6,6 +6,7 @@
   <title>{% block title %}ClipFlow{% endblock %} · ClipFlow</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
   <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+  {% block head %}{% endblock %}
 </head>
 <body>
   <header class="container">
@@ -13,10 +14,13 @@
       <ul><li><strong>ClipFlow</strong></li></ul>
       <ul>
         <li><a href="/" {% if nav == 'home' %}aria-current="page"{% endif %}>Home</a></li>
+        <li><a href="/review" {% if nav == 'review' %}aria-current="page"{% endif %}>Review{% if review_waiting %} <span class="badge badge-selected">{{ review_waiting }}</span>{% endif %}</a></li>
         <li><a href="/campaigns" {% if nav == 'campaigns' %}aria-current="page"{% endif %}>Campaigns</a></li>
-        {% for label in ['Sources', 'Clips', 'Posts', 'Settings'] %}
-        <li><span class="soon" title="coming soon">{{ label }} <small>soon</small></span></li>
-        {% endfor %}
+        <li><a href="/sources" {% if nav == 'sources' %}aria-current="page"{% endif %}>Sources</a></li>
+        <li><a href="/clips" {% if nav == 'clips' %}aria-current="page"{% endif %}>Clips</a></li>
+        <li><a href="/posts" {% if nav == 'posts' %}aria-current="page"{% endif %}>Posts{% if submit_badge and submit_badge.count %} <span class="badge {{ 'badge-ended' if submit_badge.late else 'badge-paused' }}" title="to submit">{{ submit_badge.count }}</span>{% endif %}</a></li>
+        <li><a href="/stats" {% if nav == 'stats' %}aria-current="page"{% endif %}>Stats</a></li>
+        <li><a href="/settings" {% if nav == 'settings' %}aria-current="page"{% endif %}>Settings</a></li>
       </ul>
     </nav>
   </header>

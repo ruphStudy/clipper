@@ -7,3 +7,4 @@ __pycache__/
 *.log
 client_secret*.json
 token*.json
+data/secrets/

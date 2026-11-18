@@ -1,0 +1,32 @@
+{% if rules_errors %}<p class="banner-warn" role="alert">{{ rules_errors | join(' · ') }}</p>{% endif %}
+<form method="post" action="{{ rules_action }}">
+  <div class="grid">
+    <label>Min seconds<input name="clip_min_sec" type="number" min="5" max="180" value="{{ rules.clip_min_sec }}"></label>
+    <label>Max seconds<input name="clip_max_sec" type="number" min="5" max="180" value="{{ rules.clip_max_sec }}"></label>
+    <label>Max posts / day<input name="max_posts_per_day" type="number" min="1" value="{{ rules.max_posts_per_day }}"></label>
+    <label>Language<input name="language" value="{{ rules.language }}"></label>
+  </div>
+  <div class="grid">
+    <label>Required hashtags<input name="hashtags" value="{{ rules.hashtags | join(' ') }}" placeholder="#brand #ad"></label>
+    <label>Required mentions<input name="mentions" value="{{ rules.mentions | join(' ') }}" placeholder="@brand"></label>
+  </div>
+  <label>Banned words <small>(comma separated)</small><input name="banned_words" value="{{ rules.banned_words | join(', ') }}"></label>
+  {% if show_platforms %}
+  <fieldset>
+    <legend>Post to</legend>
+    <input type="hidden" name="post_platforms_present" value="1">
+    {% for p in known_platforms %}
+    <label><input type="checkbox" name="post_platforms" value="{{ p }}" {% if p in rules.post_platforms %}checked{% endif %}
+      {% if p not in allowed_platforms %}disabled{% endif %}> {{ p }}{% if p not in allowed_platforms %} <small>(not accepted)</small>{% endif %}</label>
+    {% endfor %}
+  </fieldset>
+  {% endif %}
+  <label>Caption template <small>({hook} {credit} {mentions} {hashtags} {disclosure})</small>
+    <textarea name="caption_template" rows="4">{{ rules.caption_template }}</textarea></label>
+  <div class="grid">
+    <label>Credit text<input name="credit_text" value="{{ rules.credit_text }}" placeholder="Credit: @creator"></label>
+    <label>Disclosure tag<input name="disclosure_tag" value="{{ rules.disclosure_tag }}" placeholder="#ad"></label>
+  </div>
+  <label><input type="checkbox" name="burn_captions" value="1" {% if rules.burn_captions %}checked{% endif %}> Burn captions into video</label>
+  <button type="submit">{{ rules_submit }}</button>
+</form>

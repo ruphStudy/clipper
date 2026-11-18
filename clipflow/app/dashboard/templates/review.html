@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Review{% endblock %}
+{% block content %}
+{% if not clip %}
+<article class="caught-up">
+  <h2>🎉 All caught up</h2>
+  <p>Today: <strong>{{ stats.approved }}</strong> approved · <strong>{{ stats.rejected }}</strong> rejected</p>
+  <p><a href="/clips?status=rendered&compliance=error">Clips that need fixing →</a></p>
+</article>
+{% else %}
+<div class="review">
+  <div>
+    <video class="review-video" src="/clips/{{ clip.id }}/video" controls autoplay muted playsinline loop
+      {% if clip.thumb_path %}poster="/clips/{{ clip.id }}/thumb"{% endif %}></video>
+  </div>
+  <div>
+    <p><small>{{ position }} of {{ total }} waiting</small></p>
+    <h3>#{{ clip.id }} {{ clip.hook_title or '(no hook)' }}</h3>
+    <p><a href="/campaigns/{{ clip.campaign_id }}">{{ campaign.name if campaign else 'campaign' }}</a><br>
+      <small>⭐ {{ "%.1f" | format(clip.moment_score or 0) }} · {{ clip.duration_sec | duration }} · {{ clip.layout or '–' }}
+      · <a href="/clips/{{ clip.id }}">details</a></small></p>
+    {% if clip.compliance and clip.compliance.warnings %}
+    <ul class="warnings">{% for w in clip.compliance.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    <form method="post" action="/review/{{ clip.id }}/approve" id="approve-form">
+      <details>
+        <summary>Edit captions</summary>
+        {% for platform, field, text, limit in caption_fields %}
+        <label>{{ platform }} {{ field }} <small id="c-{{ platform }}-{{ field }}-n"></small>
+          <textarea id="c-{{ platform }}-{{ field }}" name="cap__{{ platform }}__{{ field }}" rows="{{ 2 if field == 'title' else 5 }}"
+            data-limit="{{ limit }}">{{ text }}</textarea></label>
+        {% endfor %}
+      </details>
+      <div class="review-actions">
+        <button type="submit" class="big">✅ Approve <kbd>a</kbd></button>
+        {% if next_id %}<a href="/review?id={{ next_id }}" role="button" class="secondary big" id="skip">⏭ Skip <kbd>s</kbd></a>{% endif %}
+      </div>
+    </form>
+
+    <details id="reject">
+      <summary role="button" class="outline contrast big">❌ Reject <kbd>r</kbd></summary>
+      <form method="post" action="/review/{{ clip.id }}/reject" class="reasons">
+        {% for r in reasons %}<button type="submit" name="reason" value="{{ r }}" class="outline small">{{ r }}</button>{% endfor %}
+        <input name="other" maxlength="80" placeholder="other reason…">
+        <button type="submit" name="reason" value="other" class="outline small">other</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Fix clip</summary>
+      <form method="post" action="/review/{{ clip.id }}/rerender">
+        <label>Hook<input name="hook" value="{{ clip.hook_title or '' }}" maxlength="120"></label>
+        <div class="grid">
+          <label>Start (s, −5…+5)<input type="number" name="start_delta" value="0" min="-5" max="5" step="0.5"></label>
+          <label>End (s, −5…+5)<input type="number" name="end_delta" value="0" min="-5" max="5" step="0.5"></label>
+        </div>
+        <button type="submit" class="outline">Re-render</button>
+      </form>
+    </details>
+  </div>
+</div>
+<script>
+document.querySelectorAll('textarea[data-limit]').forEach(t => {
+  const n = document.getElementById(t.id + '-n'), lim = +t.dataset.limit;
+  const upd = () => { n.textContent = t.value.length + ' / ' + lim; n.className = t.value.length > lim ? 'warn-text' : ''; };
+  t.addEventListener('input', upd); upd();
+});
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'a') document.getElementById('approve-form').submit();
+  else if (e.key === 'r') { const d = document.getElementById('reject'); d.open = true; d.scrollIntoView(); }
+  else if (e.key === 's') { const k = document.getElementById('skip'); if (k) location.href = k.href; }
+});
+</script>
+{% endif %}
+{% endblock %}

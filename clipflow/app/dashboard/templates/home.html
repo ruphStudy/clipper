@@ -17,4 +17,36 @@
   <button type="submit">Run scout now</button>
   <small>Fetches public campaigns and re-scores them (takes a few seconds).</small>
 </form>
+
+<div class="stats">
+  <article class="stat"><span class="stat-num">{{ "{:,}".format(perf.views_7d) }}</span><span>Views (7d)</span></article>
+  <article class="stat"><span class="stat-num">${{ "%.2f" | format(perf.est_7d) }} / ${{ "%.2f" | format(perf.actual_30d) }}</span><span>Est. earnings (7d) / Actual (30d)</span></article>
+</div>
+
+<article>
+  <header><strong>Posting</strong> {% if posting.paused %}<span class="badge badge-ended">paused</span>{% else %}<span class="badge badge-joined">active</span>{% endif %}</header>
+  <p><a href="/posts?tab=upcoming"><strong>{{ posting.scheduled_today }}</strong> scheduled today</a> ·
+     <a href="/posts?tab=manual"><strong>{{ posting.manual_pending }}</strong> waiting for you</a> ·
+     <a href="/posts?tab=posted"><strong>{{ posting.posted_today }}</strong> posted today</a> ·
+     <a href="/posts?tab=tosubmit"><strong>{{ posting.to_submit }}</strong> to submit</a></p>
+</article>
+
+<article>
+  <header><strong>AI spend this month</strong></header>
+  <p><strong {% if ai.spend >= ai.budget %}class="warn-text"{% endif %}>${{ "%.2f" | format(ai.spend) }}</strong>
+     / ${{ "%g" | format(ai.budget) }} · {{ ai.calls }} calls ·
+     {{ "{:,}".format(ai.input_tokens) }} in / {{ "{:,}".format(ai.output_tokens) }} out tokens</p>
+</article>
+
+<article>
+  <header><strong>Storage</strong></header>
+  <p>Downloads <strong>{{ "%.2f" | format(storage.downloads) }} GB</strong> ·
+     Clips <strong>{{ "%.2f" | format(storage.clips) }} GB</strong>
+     <small>(limit {{ storage.limit }} GB)</small> ·
+     Volume <strong {% if storage.volume_pct >= storage.warn_pct %}class="warn-text"{% endif %}>{{ "%.0f" | format(storage.volume_pct) }}% used</strong></p>
+  <form method="post" action="/actions/cleanup">
+    <button type="submit" class="outline">Run cleanup</button>
+    <small>Deletes used source/clip files past their keep window, orphans and stale partial downloads.</small>
+  </form>
+</article>
 {% endblock %}

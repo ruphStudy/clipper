@@ -158,9 +158,29 @@ def score_campaign(campaign: Campaign, snapshots: Iterable[CampaignSnapshot] = (
     return ScoreResult(score, bd, reasons[:MAX_REASONS], est, burn, days_left)
 
 
+def effective_typical_views(session: Session) -> tuple[float, str]:
+    """(views, 'learned'|'config'): average learned views of MY_PLATFORMS when AUTO_TYPICAL_VIEWS, else config."""
+    import json
+
+    from app.db.models import AppSetting
+
+    if settings.AUTO_TYPICAL_VIEWS:
+        row = session.scalar(select(AppSetting).where(AppSetting.key == "typical_views"))
+        try:
+            learned = json.loads(row.value) if row and row.value else {}
+        except ValueError:
+            learned = {}
+        vals = [float(learned[p]) for p in csv_list(settings.MY_PLATFORMS) if p in learned]
+        if vals:
+            return round(sum(vals) / len(vals)), "learned"
+    return float(settings.TYPICAL_VIEWS), "config"
+
+
 def score_all(session: Session, cfg: Optional[ScoreConfig] = None, now: Optional[datetime] = None) -> int:
     """Score every non-ended campaign; only touches score fields."""
-    cfg = cfg or ScoreConfig()
+    if cfg is None:
+        cfg = ScoreConfig()
+        cfg.typical_views = effective_typical_views(session)[0]
     now = utc(now) or datetime.now(timezone.utc)
     campaigns = session.scalars(select(Campaign).where(Campaign.status != CampaignStatus.ended)).all()
     snaps: dict[int, list[CampaignSnapshot]] = {}

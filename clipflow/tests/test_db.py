@@ -7,7 +7,7 @@ from app.db import get_engine, get_session, init_db
 from app.db.enums import Platform, PostStatus
 from app.db.models import Account, Campaign, Clip, Post, Source
 
-TABLES = {"accounts", "campaigns", "campaign_snapshots", "sources", "clips", "posts", "post_stats",
+TABLES = {"accounts", "campaigns", "campaign_snapshots", "sources", "clips", "posts", "post_stats", "ai_usage", "campaign_earnings",
           "app_settings"}
 
 

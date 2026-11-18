@@ -92,6 +92,25 @@ def _write_csv(rows: list[Campaign], reports_dir: Path, now: datetime) -> Path:
     return path
 
 
+def _performance_lines(session: Session, now: datetime) -> list[str]:
+    """'📈 Last 7 days' block (≤8 lines)."""
+    from app.tracker.service import week_summary
+
+    w = week_summary(session, now)
+    t = w["totals"]
+    lines = ["📈 <b>Last 7 days</b>", f"{t['posts']} posts · {t['views']:,} views · ~${t['est']:.2f} est."]
+    if w["best_campaign"] and w["best_campaign"]["posts"]:
+        bc = w["best_campaign"]
+        lines.append(f"Best campaign: {esc(bc['campaign'][:40])} (${bc['est_per_post']:.2f}/post)")
+    if w["best_platform"]:
+        lines.append(f"Best platform: {w['best_platform']['platform']} ({w['best_platform']['avg_views']:,} avg views)")
+    if w["best_hour"]:
+        lines.append(f"Best hour: {w['best_hour']['hour']:02d}:00 ({w['best_hour']['avg_views']:,} avg views)")
+    if w["learned"]:
+        lines.append("Typical views: " + ", ".join(f"{p} {v:,}" for p, v in sorted(w["learned"].items())))
+    return lines[:8]
+
+
 def build_report(session: Session, limit: int = 10, now: Optional[datetime] = None,
                  reports_dir: Optional[str] = None) -> tuple[str, Path]:
     """Return (telegram_html, csv_path)."""
@@ -118,6 +137,8 @@ def build_report(session: Session, limit: int = 10, now: Optional[datetime] = No
     new = [c for c in scored if last is None or (utc(c.first_seen_at) and utc(c.first_seen_at) > last)][:NEW_LIMIT]
     parts += [_compact(c) for c in new] if new else ["none"]
     parts.append("")
+
+    parts += _performance_lines(session, now) + [""]
 
     parts.append("🎯 <b>Your campaigns</b>")
     mine = [c for c in allc if c.status in (CampaignStatus.joined, CampaignStatus.selected)]

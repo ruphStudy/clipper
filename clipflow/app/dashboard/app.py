@@ -8,7 +8,7 @@ from sqlalchemy import Engine, text
 
 from app.dashboard.auth import require_auth
 from app.dashboard.deps import get_engine_for
-from app.dashboard.routes import campaigns, home
+from app.dashboard.routes import campaigns, clips, home, posts, review, rules, sources, stats
 
 
 def create_app(engine: Optional[Engine] = None, extra_local_hosts: Iterable[str] = ()) -> FastAPI:
@@ -31,4 +31,10 @@ def create_app(engine: Optional[Engine] = None, extra_local_hosts: Iterable[str]
     auth = [Depends(require_auth)]
     app.include_router(home.router, dependencies=auth)
     app.include_router(campaigns.router, dependencies=auth)
+    app.include_router(sources.router, dependencies=auth)
+    app.include_router(rules.router, dependencies=auth)
+    app.include_router(review.router, dependencies=auth)
+    app.include_router(clips.router, dependencies=auth)
+    app.include_router(posts.router, dependencies=auth)
+    app.include_router(stats.router, dependencies=auth)
     return app

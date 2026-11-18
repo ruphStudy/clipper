@@ -19,7 +19,13 @@ from app.scout.scorer import score_all, utc
 
 log = get_logger("clipflow.scout")
 
+MANUAL_PREFIX = "manual-"
 SNAPSHOT_INTERVAL = timedelta(hours=6)
+
+
+def is_manual(external_id: Optional[str]) -> bool:
+    """True for campaigns created by hand in the dashboard."""
+    return bool(external_id) and external_id.startswith(MANUAL_PREFIX)
 SNAPSHOT_RETENTION = timedelta(days=60)
 
 USER_LOCKED_STATUSES = {CampaignStatus.selected, CampaignStatus.joined, CampaignStatus.paused}
@@ -91,8 +97,12 @@ def _upsert(dtos: list[CampaignDTO], partial: bool, engine: Optional[Engine]) ->
     new = updated = ended = 0
     seen = {d.external_id for d in dtos}
     with get_session(engine) as s:
-        existing = {c.external_id: c for c in s.scalars(select(Campaign))}
+        # Manual campaigns are user-owned: never updated or ended by the scout.
+        existing = {c.external_id: c for c in s.scalars(select(Campaign))
+                    if not is_manual(c.external_id)}
         for dto in dtos:
+            if is_manual(dto.external_id):
+                continue
             row = existing.get(dto.external_id)
             live = dto.is_live is not False
             if row is None:

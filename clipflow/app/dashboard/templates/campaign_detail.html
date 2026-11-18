@@ -5,6 +5,7 @@
 <hgroup>
   <h2>#{{ c.id }} {{ c.name }}</h2>
   <p>{{ c.brand or '' }} · <span class="badge badge-{{ c.status.value }}">{{ c.status.value }}</span>
+    {% include "_rules_badge.html" %}
     · <a href="{{ c.url }}" target="_blank" rel="noopener noreferrer">Open campaign page ↗</a></p>
 </hgroup>
 
@@ -62,8 +63,73 @@
 </table>
 {% else %}<p><small>No snapshots yet.</small></p>{% endif %}
 
-<article class="placeholder">
-  <header><strong>Sources &amp; rules</strong></header>
-  <p>Sources &amp; rules — coming in S2-P2</p>
+<h3 id="performance">Performance</h3>
+<p>{{ perf.posts }} live posts · {{ "{:,}".format(perf.views) }} views · est ${{ "%.2f" | format(perf.est) }} · actual ${{ "%.2f" | format(perf.actual) }}</p>
+{% if perf.payouts %}<ul>{% for p in perf.payouts[:5] %}<li><small>{{ p.period_end }}: ${{ "%.2f" | format(p.amount_usd) }}{% if p.note %} — {{ p.note }}{% endif %}</small></li>{% endfor %}</ul>{% endif %}
+<details>
+  <summary>Add actual payout</summary>
+  <form method="post" action="/campaigns/{{ c.id }}/earnings" class="grid">
+    <input name="amount" inputmode="decimal" placeholder="Amount (USD)" required aria-label="amount">
+    <input name="period_end" type="date" aria-label="period end">
+    <input name="note" placeholder="Note (optional)" aria-label="note">
+    <button type="submit">Save payout</button>
+  </form>
+</details>
+
+<h3 id="rules">Rules {% include "_rules_badge.html" %}</h3>
+{% if c.rules_confirmed_at %}<p><small>Confirmed {{ c.rules_confirmed_at | local_time }}</small></p>{% endif %}
+{% if suggestions %}
+<article>
+  <header><strong>Suggested from campaign rules</strong> <small>(regex, review before saving)</small></header>
+  <ul>
+    {% if suggestions.hashtags %}<li>Hashtags: {{ suggestions.hashtags | join(' ') }}</li>{% endif %}
+    {% if suggestions.mentions %}<li>Mentions: {{ suggestions.mentions | join(' ') }}</li>{% endif %}
+    {% if suggestions.clip_min_sec is defined %}<li>Min length: {{ suggestions.clip_min_sec }}s</li>{% endif %}
+    {% if suggestions.clip_max_sec is defined %}<li>Max length: {{ suggestions.clip_max_sec }}s</li>{% endif %}
+    {% if suggestions.disclosure_tag %}<li>Disclosure: {{ suggestions.disclosure_tag }}</li>{% endif %}
+  </ul>
+  {% if suggestions.hashtags or suggestions.mentions or suggestions.clip_min_sec is defined
+        or suggestions.clip_max_sec is defined or suggestions.disclosure_tag %}
+  <form method="post" action="/campaigns/{{ c.id }}/rules/apply-suggestions">
+    <button type="submit" class="outline">Apply suggestions</button></form>
+  {% endif %}
+  {% if suggestions.banned_hints %}
+  <p><strong>Read these restrictions</strong> <small>(not applied automatically)</small></p>
+  <ul>{% for h in suggestions.banned_hints %}<li>{{ h }}</li>{% endfor %}</ul>
+  {% endif %}
 </article>
+{% endif %}
+{% set rules_action = '/campaigns/' ~ c.id ~ '/rules' %}{% set rules_submit = 'Save & confirm rules' %}{% set show_platforms = True %}
+{% include "_rules_form.html" %}
+
+<h4>Caption preview</h4>
+{% for p in previews %}
+<article>
+  <header><strong>{{ p.out.platform }}</strong>
+    {% if p.violations %}<span class="badge badge-ended">{{ p.violations | join('; ') }}</span>
+    {% else %}<span class="badge badge-joined">OK</span>{% endif %}</header>
+  {% if p.out.title %}<p><strong>Title:</strong> {{ p.out.title }}</p>{% endif %}
+  <p class="pre">{{ p.body }}</p>
+  <small>{{ p.body | length }} chars</small>
+</article>
+{% else %}<p><small>Choose at least one platform to preview captions.</small></p>{% endfor %}
+
+<h3 id="sources">Footage sources <small>({{ sources_rows | length }})</small></h3>
+{% if c.status.value != 'joined' %}
+<p class="banner-warn">Join this campaign on Content Rewards first —
+  <a href="{{ c.url }}" target="_blank" rel="noopener noreferrer">open campaign page ↗</a></p>
+{% endif %}
+{% set back = '/campaigns/' ~ c.id %}
+{% include "_sources_table.html" %}
+
+<form method="post" action="/campaigns/{{ c.id }}/sources">
+  <label>Add footage links
+    <textarea name="links" rows="4" placeholder="One URL per line (YouTube, Drive, Twitch, Kick, .mp4 …)"></textarea>
+  </label>
+  {% if c.status.value != 'joined' %}
+  <label><input type="checkbox" name="mark_joined" value="1"
+    {% if c.status.value in ['discovered', 'selected'] %}checked{% endif %}> Mark campaign as joined</label>
+  {% endif %}
+  <button type="submit">Add sources</button>
+</form>
 {% endblock %}

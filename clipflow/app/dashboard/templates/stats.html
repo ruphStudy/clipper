@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Stats{% endblock %}
+{% block content %}
+<div class="pager">
+  <h2>Stats</h2>
+  <nav class="tabs">
+    {% for p in periods %}<a href="/stats?days={{ p }}" {% if days == p %}aria-current="page"{% endif %}>{{ p }} days</a>{% endfor %}
+    <a href="/stats.csv?days={{ days }}">Export CSV</a>
+  </nav>
+</div>
+<div class="stats">
+  <article class="stat"><span class="stat-num">{{ d.totals.posts }}</span><span>posts</span></article>
+  <article class="stat"><span class="stat-num">{{ "{:,}".format(d.totals.views) }}</span><span>views</span></article>
+  <article class="stat"><span class="stat-num">${{ "%.2f" | format(d.totals.est) }}</span><span>estimated</span></article>
+  <article class="stat"><span class="stat-num">${{ "%.2f" | format(d.totals.actual) }}</span><span>actual payouts</span></article>
+  <article class="stat"><span class="stat-num">{{ d.flop_rate if d.flop_rate is not none else '–' }}{% if d.flop_rate is not none %}%{% endif %}</span><span>flops (&lt;500 views after 3d)</span></article>
+</div>
+
+{% for title, key, rows in tables %}
+<h3>{{ title }}</h3>
+{% if rows %}
+{% set top = (rows | map(attribute='views') | max) or 1 %}
+<div class="overflow-auto">
+<table class="striped stats-table">
+  <thead><tr><th>{{ title[:-1] if title.endswith('s') else title }}</th><th>Posts</th><th>Views</th><th class="bar-col"></th><th>Avg</th><th>Est $</th><th>$/post</th><th>Hit %</th>{% if key == 'campaign' %}<th>Actual $</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td>{% if key == 'hour' %}{{ "%02d" | format(r.hour) }}:00{% else %}{{ r[key] }}{% endif %}</td><td>{{ r.posts }}</td>
+      <td>{{ "{:,}".format(r.views) }}</td>
+      <td class="bar-col"><div class="bar" style="width: {{ (100 * r.views / top) | round(1) }}%"></div></td>
+      <td>{{ "{:,}".format(r.avg_views) }}</td><td>{{ "%.2f" | format(r.est) }}</td><td>{{ "%.2f" | format(r.est_per_post) }}</td>
+      <td>{{ r.hit_rate }}</td>{% if key == 'campaign' %}<td>{{ "%.2f" | format(r.actual) }}</td>{% endif %}</tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p><small>No data yet.</small></p>{% endif %}
+{% endfor %}
+
+{% if d.est_vs_actual %}
+<h3>Estimate vs actual</h3>
+<table>
+  <thead><tr><th>Campaign</th><th>Est $</th><th>Actual $</th><th>Actual / est</th></tr></thead>
+  <tbody>{% for r in d.est_vs_actual %}<tr><td>{{ r.campaign }}</td><td>{{ "%.2f" | format(r.est) }}</td><td>{{ "%.2f" | format(r.actual) }}</td><td>{{ r.ratio if r.ratio is not none else '–' }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+
+<h3>Top posts</h3>
+{% if d.top_posts %}
+<table class="striped">
+  <thead><tr><th>#</th><th>Platform</th><th>Campaign</th><th>Views</th><th>Est $</th><th>Link</th></tr></thead>
+  <tbody>{% for r in d.top_posts %}<tr><td>{{ r.id }}</td><td>{{ r.platform }}</td><td>{{ r.campaign | truncate(36, True, '…') }}</td>
+    <td>{{ "{:,}".format(r.views) }}</td><td>{{ "%.2f" | format(r.est) }}</td>
+    <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener noreferrer">open ↗</a>{% else %}–{% endif %}</td></tr>{% endfor %}</tbody>
+</table>
+{% else %}<p><small>No posts in this period.</small></p>{% endif %}
+{% endblock %}

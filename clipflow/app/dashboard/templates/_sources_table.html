@@ -1,0 +1,58 @@
+{% set kind_labels = {'drive': '📁 Drive', 'youtube': '▶️ YouTube', 'twitch': '🎮 Twitch', 'kick': '🟢 Kick', 'direct': '🎞️ File', 'other': '🔗 Other'} %}
+{% set items = sources_rows or [] %}
+{% if items %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr>{% if show_campaign %}<th>Campaign</th>{% endif %}<th>Kind</th><th>URL</th><th>Status</th>
+    <th>Duration</th><th>Size</th><th>Transcript</th><th>Moments</th><th>Clips</th>{% if show_campaign %}<th>Updated</th>{% else %}<th>Error</th>{% endif %}<th>Actions</th></tr></thead>
+  <tbody>
+  {% for s, campaign_name in items %}
+    <tr>
+      {% if show_campaign %}<td><a href="/campaigns/{{ s.campaign_id }}#sources">{{ campaign_name }}</a></td>{% endif %}
+      <td>{{ kind_labels.get(s.kind.value, s.kind.value) }}{% if is_folder(s.url) %} <mark class="flag">folder</mark>{% endif %}</td>
+      <td><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer" title="{{ s.url }}">{{ s.url | truncate(48, True, '…') }}</a></td>
+      <td><span class="badge badge-src-{{ s.status.value }}">{{ s.status.value }}</span>
+        {% if s.status.value == 'failed' %}
+          {% if s.error_permanent %}<span class="badge badge-ended">permanent</span>
+          {% else %}<br><small>attempt {{ s.attempts or 0 }}/3{% if s.next_retry_at %} · retry at {{ s.next_retry_at | local_time('%H:%M') }}{% endif %}</small>{% endif %}
+        {% endif %}
+        {% if s.file_deleted_at %}<br><small>file cleaned up</small>{% endif %}</td>
+      <td>{{ s.duration_sec | duration }}</td><td>{{ s.local_path | filesize }}</td>
+      <td>{% if s.transcript_path %}✓ <small>({{ s.word_count or 0 }} words, {{ "%.0f" | format((s.speech_ratio or 0) * 100) }}% speech)</small>
+          {% elif s.error and s.error.startswith('transcribe:') %}<span title="{{ s.error }}">✗</span> <small>{{ s.error[11:] | truncate(40, True, '…') }}</small>
+          {% else %}–{% endif %}</td>
+      {% set cc = (clip_counts or {}).get(s.id, {}) %}
+      <td>{% if s.moments_at %}{{ cc.get('total', 0) }} <small>({{ s.moments_method }})</small>
+          {% elif s.error and s.error.startswith('moments:') %}<span title="{{ s.error }}">✗</span>
+          {% else %}–{% endif %}</td>
+      <td>{% if cc.get('total') %}<a href="/clips?source={{ s.id }}&status=all">{{ cc.get('rendered', 0) }}/{{ cc.get('total', 0) }}</a>{% else %}–{% endif %}</td>
+      {% if show_campaign %}<td>{{ s.updated_at | local_time }}</td>
+      {% else %}<td><small>{{ (s.error or '–') | truncate(60, True, '…') }}</small></td>{% endif %}
+      <td class="actions">
+        {% if s.status.value in ['pending', 'failed'] %}
+        <form method="post" action="/sources/{{ s.id }}/download"><input type="hidden" name="back" value="{{ back }}">
+          <button type="submit" class="small">Download</button></form>
+        {% endif %}
+        {% if s.status.value == 'downloaded' and not s.transcript_path %}
+        <form method="post" action="/sources/{{ s.id }}/transcribe"><input type="hidden" name="back" value="{{ back }}">
+          <button type="submit" class="small">Transcribe</button></form>
+        {% endif %}
+        {% if s.status.value == 'downloaded' and not s.moments_at and (s.transcript_path or (s.transcribe_attempts or 0) >= 2) %}
+        <form method="post" action="/sources/{{ s.id }}/moments"><input type="hidden" name="back" value="{{ back }}">
+          <button type="submit" class="small">Pick moments</button></form>
+        {% endif %}
+        {% if s.status.value == 'failed' %}
+        <form method="post" action="/sources/{{ s.id }}/retry"><input type="hidden" name="back" value="{{ back }}">
+          <button type="submit" class="outline secondary small">Retry</button></form>
+        {% endif %}
+        <details class="confirm"><summary role="button" class="outline secondary small">Delete</summary>
+          <form method="post" action="/sources/{{ s.id }}/delete"><input type="hidden" name="back" value="{{ back }}">
+            <button type="submit" class="small danger">Confirm delete</button></form>
+        </details>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p><small>No sources yet.</small></p>{% endif %}

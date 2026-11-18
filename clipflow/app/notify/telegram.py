@@ -18,6 +18,7 @@ API_BASE = "https://api.telegram.org/bot{token}/"
 MAX_CHUNK = 4000
 MAX_ATTEMPTS = 3
 MAX_RETRY_AFTER = 30
+MAX_VIDEO_BYTES = 50 * 1024 * 1024
 TIMEOUT = 15.0
 
 
@@ -55,6 +56,7 @@ class TelegramNotifier:
         self.base_url = API_BASE.format(token=self.token)
         self.client = client or httpx.Client(timeout=TIMEOUT)
         self._warned_disabled = False
+        self.last_message_id: Optional[int] = None
 
     @property
     def enabled(self) -> bool:
@@ -107,12 +109,18 @@ class TelegramNotifier:
             return data
         return None
 
-    def send_message(self, text: str, parse_mode: str = "HTML", silent: bool = False) -> bool:
-        """Send text (auto-chunked); never raises."""
+    def send_message(self, text: str, parse_mode: str = "HTML", silent: bool = False,
+                     reply_markup: Optional[dict] = None) -> bool:
+        """Send text (auto-chunked; reply_markup goes on the last chunk); never raises.
+
+        The id of the last message sent is kept in `last_message_id` (for later edits).
+        """
+        self.last_message_id = None
         if not self._check_enabled():
             return False
         try:
-            for chunk in split_text(text):
+            chunks = split_text(text)
+            for i, chunk in enumerate(chunks):
                 payload = {
                     "chat_id": self.chat_id,
                     "text": chunk,
@@ -120,11 +128,39 @@ class TelegramNotifier:
                     "disable_web_page_preview": True,
                     "disable_notification": silent,
                 }
-                if self._call("sendMessage", json=payload) is None:
+                if reply_markup and i == len(chunks) - 1:
+                    payload["reply_markup"] = reply_markup
+                data = self._call("sendMessage", json=payload)
+                if data is None:
                     return False
+                self.last_message_id = (data.get("result") or {}).get("message_id")
             return True
         except Exception as exc:  # noqa: BLE001
             log.error("telegram send_message error: %s", self._safe(exc))
+            return False
+
+    def answer_callback_query(self, callback_query_id: str, text: str = "") -> bool:
+        """Acknowledge an inline-button tap (shows a small toast); never raises."""
+        if not self.token:
+            return False
+        try:
+            return self._call("answerCallbackQuery",
+                              json={"callback_query_id": callback_query_id, "text": text[:190]}) is not None
+        except Exception as exc:  # noqa: BLE001
+            log.error("telegram answer_callback_query error: %s", self._safe(exc))
+            return False
+
+    def edit_message_text(self, message_id: int, text: str, reply_markup: Optional[dict] = None) -> bool:
+        """Replace a sent message's text (an empty keyboard removes the buttons); never raises."""
+        if not self._check_enabled():
+            return False
+        try:
+            payload = {"chat_id": self.chat_id, "message_id": message_id, "text": text[:4000],
+                       "parse_mode": "HTML", "disable_web_page_preview": True,
+                       "reply_markup": reply_markup if reply_markup is not None else {"inline_keyboard": []}}
+            return self._call("editMessageText", json=payload) is not None
+        except Exception as exc:  # noqa: BLE001
+            log.error("telegram edit_message_text error: %s", self._safe(exc))
             return False
 
     def send_document(self, file_path: str, caption: str = "") -> bool:
@@ -141,10 +177,31 @@ class TelegramNotifier:
             log.error("telegram send_document error: %s", self._safe(exc))
             return False
 
-    def get_updates(self) -> list[dict]:
-        """Return recent updates (used to discover chat ids); needs only the token."""
+    def send_video(self, file_path: str, caption: str = "") -> bool:
+        """Upload a video (≤50 MB as a playable video, larger as a document); never raises."""
+        if not self._check_enabled():
+            return False
+        try:
+            path = Path(file_path)
+            if path.stat().st_size > MAX_VIDEO_BYTES:
+                return self.send_document(file_path, caption)
+            with path.open("rb") as fh:
+                data = {"chat_id": self.chat_id, "caption": caption, "parse_mode": "HTML",
+                        "supports_streaming": "true"}
+                return self._call("sendVideo", data=data, files={"video": (path.name, fh, "video/mp4")}) is not None
+        except Exception as exc:  # noqa: BLE001
+            log.error("telegram send_video error: %s", self._safe(exc))
+            return False
+
+    def get_updates(self, offset: Optional[int] = None, allowed_updates: Optional[list[str]] = None) -> list[dict]:
+        """Return updates after `offset` (also used to discover chat ids); needs only the token."""
         if not self.token:
             log.warning("telegram token missing")
             return []
-        data = self._call("getUpdates")
+        payload: dict = {"timeout": 0}
+        if offset is not None:
+            payload["offset"] = offset
+        if allowed_updates is not None:
+            payload["allowed_updates"] = allowed_updates
+        data = self._call("getUpdates", json=payload)
         return list(data.get("result", [])) if data else []

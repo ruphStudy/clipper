@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Clips{% endblock %}
+{% block content %}
+<h2>Clips <small>({{ rows | length }})</small></h2>
+<form method="get" action="/clips" class="filters">
+  <select name="status" aria-label="Status">
+    <option value="all" {% if status == 'all' %}selected{% endif %}>all statuses</option>
+    {% for s in statuses %}<option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="compliance" aria-label="Compliance">
+    <option value="" {% if not compliance %}selected{% endif %}>any compliance</option>
+    {% for v, label in [('ok', '✓ ok'), ('warn', '⚠ warnings'), ('error', '✗ errors')] %}
+    <option value="{{ v }}" {% if compliance == v %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  {% if source %}<input type="hidden" name="source" value="{{ source }}">{% endif %}
+  <button type="submit">Filter</button>
+</form>
+{% if rows %}
+<form method="post" action="/clips/bulk" id="bulk">
+<input type="hidden" name="back" value="/clips?status={{ status }}{% if compliance %}&compliance={{ compliance }}{% endif %}{% if source %}&source={{ source }}{% endif %}">
+<div class="bulk-bar">
+  <button type="submit" name="action" value="approve" class="small">Approve selected</button>
+  <select name="reason" aria-label="Reject reason">
+    {% for r in ['boring', 'bad cut', 'bad captions', 'off-brief', 'duplicate', 'quality'] %}<option>{{ r }}</option>{% endfor %}
+  </select>
+  <button type="submit" name="action" value="reject" class="outline small">Reject selected</button>
+</div>
+<div class="clip-grid">
+  {% for c, campaign_name in rows %}
+  <article class="clip-card">
+    <label class="pick"><input type="checkbox" name="ids" value="{{ c.id }}" aria-label="select clip {{ c.id }}"> #{{ c.id }}</label>
+    <a href="/clips/{{ c.id }}">
+      {% if c.thumb_path %}<img src="/clips/{{ c.id }}/thumb" alt="" loading="lazy">
+      {% else %}<div class="thumb-empty">{{ c.status.value }}</div>{% endif %}
+    </a>
+    <p><a href="/clips/{{ c.id }}"><strong>{{ c.hook_title or '(no hook)' }}</strong></a></p>
+    <small>⭐ {{ "%.1f" | format(c.moment_score or 0) }} · {{ (c.duration_sec or (c.end_sec - c.start_sec)) | duration }}
+      {% if c.layout %}· {{ c.layout }}{% endif %}<br>
+      <span class="badge">{{ c.status.value }}</span>
+      {% set cs = compliance_state(c.compliance) %}
+      {% if cs == 'ok' %}<span class="badge badge-joined" title="compliance ok">✓</span>
+      {% elif cs == 'warn' %}<span class="badge badge-paused" title="{{ c.compliance.warnings | join('; ') }}">⚠ {{ c.compliance.warnings | length }}</span>
+      {% elif cs == 'error' %}<span class="badge badge-ended" title="{{ c.compliance.errors | join('; ') }}">✗ {{ c.compliance.errors | length }}</span>{% endif %} · <a href="/campaigns/{{ c.campaign_id }}">{{ campaign_name | truncate(28, True, '…') }}</a></small>
+  </article>
+  {% endfor %}
+</div>
+</form>
+{% else %}<p><small>No clips{% if status != 'all' %} with status {{ status }}{% endif %}.</small></p>{% endif %}
+{% endblock %}

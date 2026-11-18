@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Add campaign{% endblock %}
+{% block content %}
+<p><a href="/campaigns">← Campaigns</a></p>
+<h2>Add campaign manually</h2>
+{% if errors %}<p class="banner-warn" role="alert">{{ errors | join(' · ') }}</p>{% endif %}
+<form method="post" action="/campaigns/new">
+  <label>Name *<input name="name" required value="{{ form.name or '' }}"></label>
+  <label>Campaign URL *<input name="url" type="url" required placeholder="https://…" value="{{ form.url or '' }}"></label>
+  <label>Brand<input name="brand" value="{{ form.brand or '' }}"></label>
+  <fieldset>
+    <legend>Platforms</legend>
+    {% for p in platforms %}
+    <label><input type="checkbox" name="platforms" value="{{ p }}" {% if p in (form.platforms or []) %}checked{% endif %}> {{ p }}</label>
+    {% endfor %}
+  </fieldset>
+  <div class="grid">
+    <label>CPM ($ / 1K views)<input name="cpm_rate" inputmode="decimal" value="{{ form.cpm_rate or '' }}"></label>
+    <label>Budget left ($)<input name="budget_left" inputmode="decimal" value="{{ form.budget_left or '' }}"></label>
+  </div>
+  <div class="grid">
+    <label>Min payout ($)<input name="min_payout" inputmode="decimal" value="{{ form.min_payout or '' }}"></label>
+    <label>Max payout per clip ($)<input name="max_payout_per_clip" inputmode="decimal" value="{{ form.max_payout_per_clip or '' }}"></label>
+  </div>
+  <label><input type="checkbox" name="requires_application" value="1" {% if form.requires_application %}checked{% endif %}> Requires application</label>
+  <label>Notes<textarea name="notes" rows="3">{{ form.notes or '' }}</textarea></label>
+  <button type="submit">Create campaign (joined)</button>
+</form>
+{% endblock %}

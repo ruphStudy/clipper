@@ -124,7 +124,7 @@ def test_detail_page(client, engine):
     assert r.status_code == 200
     assert "earnings" in r.text and "18.0" in r.text and "high $/clip ($6.00)" in r.text
     assert "$9,500" in r.text and "$9,000" in r.text
-    assert "coming in S2-P2" in r.text and 'target="_blank"' in r.text
+    assert "Footage sources" in r.text and 'target="_blank"' in r.text
     assert client.get("/campaigns/99999").status_code == 404
 
 

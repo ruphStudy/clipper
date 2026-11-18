@@ -1,5 +1,5 @@
 """Home page and global actions."""
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
@@ -8,9 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.config import csv_list, settings
 from app.dashboard.deps import get_db, get_engine_for, redirect, render
-from app.db.enums import CampaignStatus, ClipStatus, SourceStatus
+from app.db.enums import CampaignStatus, ClipStatus, PostStatus, SourceStatus
 from app.db.models import Campaign, Clip, Post, Source
+from app.ai.usage import month_usage
+from app.downloader.cleanup import run_cleanup
+from app.downloader.media import disk_usage_gb, volume_used_pct
 from app.logger import get_logger
+from app.posting.modes import is_paused
 from app.scout import service as scout_service
 from app.scout.report import get_last_report_at
 
@@ -40,9 +44,37 @@ def home(request: Request, db: Session = Depends(get_db)):
         ("Clips awaiting review", _count(db, select(Clip.id).where(Clip.status == ClipStatus.rendered))),
         ("Posts today", _count(db, select(Post.id).where(Post.posted_at >= day_start))),
     ]
-    return render(request, "home.html", stats=stats,
+    storage = {"downloads": disk_usage_gb(settings.DOWNLOAD_DIR), "clips": disk_usage_gb(settings.CLIPS_DIR),
+               "volume_pct": volume_used_pct(), "limit": settings.MAX_DISK_GB,
+               "warn_pct": settings.DISK_WARN_PCT}
+    tomorrow = day_start + timedelta(days=1)
+    posting = {
+        "scheduled_today": _count(db, select(Post.id).where(Post.status == PostStatus.scheduled,
+                                                            Post.scheduled_at >= day_start, Post.scheduled_at < tomorrow)),
+        "manual_pending": _count(db, select(Post.id).where(Post.status == PostStatus.manual_pending)),
+        "posted_today": _count(db, select(Post.id).where(Post.status == PostStatus.posted, Post.posted_at >= day_start)),
+        "paused": is_paused(db),
+        "to_submit": _count(db, select(Post.id).where(Post.status == PostStatus.posted)),
+    }
+    from app.tracker.analytics import compute
+    week, month = compute(db, 7), compute(db, 30)
+    perf = {"views_7d": week["totals"]["views"], "est_7d": week["totals"]["est"], "actual_30d": month["totals"]["actual"]}
+    return render(request, "home.html", stats=stats, storage=storage, posting=posting, perf=perf,
+                  ai=month_usage(get_engine_for(request)),
                   last_scout=db.scalar(select(func.max(Campaign.last_seen_at))),
                   last_report=get_last_report_at(db), nav="home")
+
+
+@router.post("/actions/cleanup")
+def action_cleanup(request: Request):
+    try:
+        r = run_cleanup(engine=get_engine_for(request))
+        msg = (f"Cleanup done: {r['files_deleted']} files, {r['gb_freed']:.2f} GB freed, {r['orphans']} orphans"
+               + (f" · ⚠️ {'; '.join(r['warnings'])}" if r["warnings"] else ""))
+    except Exception as exc:  # noqa: BLE001
+        log.error("dashboard cleanup failed: %s", exc)
+        msg = f"Cleanup failed: {type(exc).__name__}: {str(exc)[:200]}"
+    return redirect("/", msg)
 
 
 @router.post("/actions/scout")

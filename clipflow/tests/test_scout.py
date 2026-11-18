@@ -231,3 +231,43 @@ def test_auto_migrate_adds_missing_column(tmp_path):
         assert conn.execute(text("SELECT is_live FROM campaigns")).scalar() == 1
     assert auto_migrate(eng) == []
     eng.dispose()
+
+
+def test_auto_migrate_relaxes_clip_len_and_fixes_defaults(tmp_path):
+    from app.db.models import Source
+
+    eng = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}")
+    with eng.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE campaigns (id INTEGER PRIMARY KEY, external_id VARCHAR(255) UNIQUE, name VARCHAR(512) "
+            "NOT NULL, url VARCHAR(1024) NOT NULL, status VARCHAR(32) NOT NULL DEFAULT 'discovered', "
+            "clip_min_sec INTEGER NOT NULL, clip_max_sec INTEGER NOT NULL, rules_confirmed_at DATETIME, "
+            "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"
+        ))
+        conn.execute(text("CREATE TABLE app_settings (id INTEGER PRIMARY KEY, key VARCHAR(255) UNIQUE, value TEXT, "
+                          "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"))
+        conn.execute(text(
+            "INSERT INTO campaigns (id, external_id, name, url, clip_min_sec, clip_max_sec, rules_confirmed_at, "
+            "created_at, updated_at) VALUES "
+            "(1, 'a', 'Default', 'u', 15, 60, NULL, '2026-01-01', '2026-01-01'), "
+            "(2, 'b', 'Confirmed', 'u', 15, 60, '2026-02-01', '2026-01-01', '2026-01-01'), "
+            "(3, 'c', 'Custom', 'u', 20, 45, NULL, '2026-01-01', '2026-01-01')"
+        ))
+    eng.dispose()
+    eng = init_db(get_engine(str(tmp_path / "legacy.db")))
+    cols = {c["name"]: c for c in inspect(eng).get_columns("campaigns")}
+    assert cols["clip_min_sec"]["nullable"] and cols["clip_max_sec"]["nullable"]
+    assert "ix_campaigns_status" in {i["name"] for i in inspect(eng).get_indexes("campaigns")}
+    with get_session(eng) as s:
+        rows = {c.external_id: (c.name, c.clip_min_sec, c.clip_max_sec) for c in s.scalars(select(Campaign))}
+        s.add(Source(campaign_id=1, url="https://x.test/v.mp4", kind="direct"))
+    assert rows == {"a": ("Default", None, None), "b": ("Confirmed", 15, 60), "c": ("Custom", 20, 45)}
+    with get_session(eng) as s:
+        s.get(Campaign, 1).clip_min_sec, s.get(Campaign, 1).clip_max_sec = 15, 60
+    assert auto_migrate(eng) == []  # flag set: the fix runs only once
+    with get_session(eng) as s:
+        assert s.get(Campaign, 1).clip_min_sec == 15
+        s.delete(s.get(Campaign, 1))
+    with get_session(eng) as s:
+        assert s.scalars(select(Source)).all() == []  # FK cascade still works after the rebuild
+    eng.dispose()

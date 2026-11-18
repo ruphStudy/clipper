@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Campaigns{% endblock %}
 {% block content %}
-<h2>Campaigns <small>({{ total }})</small></h2>
+<div class="pager"><h2>Campaigns <small>({{ total }})</small></h2>
+  <a href="/campaigns/new" role="button" class="outline">＋ Add campaign</a></div>
 <form method="get" action="/campaigns" class="filters">
   <select name="status" aria-label="Status">
     <option value="" {% if not f.status %}selected{% endif %}>active (not ended)</option>
@@ -29,7 +30,8 @@
     <tr>
       <td><strong>{{ "%.1f" | format(c.score or 0) }}</strong></td>
       <td><a href="/campaigns/{{ c.id }}">{{ c.name }}</a>
-        {% if c.requires_application %}<mark class="flag">needs app</mark>{% endif %}</td>
+        {% if c.requires_application %}<mark class="flag">needs app</mark>{% endif %}
+        {% include "_rules_badge.html" %}</td>
       <td>{{ c.cpm_rate | money(2) if c.cpm_rate is not none else (c.payout_type or '–') }}</td>
       <td>{{ c.est_per_clip | money(2) }}</td>
       <td>{{ c.budget_left | money }}</td>

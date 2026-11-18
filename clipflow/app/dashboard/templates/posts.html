@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Posts{% endblock %}
+{% block head %}{% if tab == 'tosubmit' %}<meta http-equiv="refresh" content="30">{% endif %}{% endblock %}
+{% block content %}
+<div class="pager">
+  <h2>Posts</h2>
+  <form method="post" action="/posting/toggle">
+    <small>{% if next_due %}next due {{ next_due | local_time('%d %b %H:%M') }} · {% endif %}</small>
+    <button type="submit" class="small {{ 'contrast' if paused else 'outline' }}">{{ '▶️ Resume posting' if paused else '⏸ Pause posting' }}</button>
+  </form>
+</div>
+{% if paused %}<p class="banner-warn">Posting is paused — nothing is planned or published until you resume.</p>{% endif %}
+<nav class="tabs">
+  {% for t, label in [('tosubmit', 'To submit'), ('upcoming', 'Upcoming'), ('manual', 'Manual'), ('posted', 'Posted'), ('failed', 'Failed')] %}
+  <a href="/posts?tab={{ t }}" {% if tab == t %}aria-current="page"{% endif %}>{{ label }} <small>({{ counts[t] }})</small></a>
+  {% endfor %}
+</nav>
+
+{% if not rows %}<p><small>Nothing here.</small></p>
+{% elif tab == 'tosubmit' %}
+  {% for p, c, a, campaign_name in rows %}{% set info = submit_info[p.id] %}
+  <article class="submit-card">
+    <header>
+      {% if info.late %}<span class="badge badge-ended">late</span>{% else %}<span class="badge badge-paused countdown">{{ info.left }} left</span>{% endif %}
+      <strong>#{{ p.id }} {{ p.platform.value }}</strong> @{{ a.handle | replace('@', '') }} · {{ campaign_name | truncate(40, True, '…') }}
+    </header>
+    <div class="paste-link">
+      <input id="url-{{ p.id }}" value="{{ p.post_url or '' }}" readonly aria-label="post link">
+      <button type="button" class="small outline copy-btn" data-target="url-{{ p.id }}">Copy</button>
+    </div>
+    <div class="review-actions">
+      {% if info.campaign_url %}<a href="{{ info.campaign_url }}" target="_blank" rel="noopener noreferrer" role="button" class="small secondary">📋 Open campaign</a>{% endif %}
+      <form method="post" action="/posts/{{ p.id }}/submitted"><button type="submit" class="small">✅ Submitted</button></form>
+    </div>
+  </article>
+  {% endfor %}
+{% elif tab == 'manual' %}
+  {% for p, c, a, campaign_name in rows %}
+  <article class="manual-post">
+    <header><strong>#{{ p.id }} {{ p.platform.value }}</strong> @{{ a.handle | replace('@', '') }} · {{ campaign_name | truncate(40, True, '…') }}
+      <small>· sent {{ p.notified_at | local_time('%d %b %H:%M') }}</small></header>
+    <div class="grid">
+      <div>
+        {% if c.thumb_path and not c.file_deleted_at %}<img class="manual-thumb" src="/clips/{{ c.id }}/thumb" alt="">{% endif %}
+        <p><a href="/clips/{{ c.id }}/video?download=1" role="button" class="small">⬇ Download video</a></p>
+      </div>
+      <div>
+        <label>Caption<textarea id="cap-{{ p.id }}" rows="6" readonly>{{ captions.get(p.id, '') }}</textarea></label>
+        <button type="button" class="small outline copy-btn" data-target="cap-{{ p.id }}">Copy caption</button>
+        <form method="post" action="/posts/{{ p.id }}/mark-posted" class="paste-link">
+          <input type="url" name="url" required placeholder="Paste the {{ p.platform.value }} link after posting">
+          <button type="submit" class="small">Mark posted</button>
+        </form>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+{% else %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead><tr><th>{{ 'When' if tab == 'upcoming' else 'Posted' if tab == 'posted' else 'Updated' }}</th><th>Clip</th><th>Platform</th>
+    <th>Account</th><th>Mode</th><th>Status</th>{% if tab != 'upcoming' %}<th>Visibility</th><th>Link</th><th>Views</th><th>Likes</th><th>Est $</th><th>Checked</th><th>Error</th>{% else %}<th>Actions</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for p, c, a, campaign_name in rows %}
+    <tr>
+      <td>{{ (p.scheduled_at if tab == 'upcoming' else p.posted_at if tab == 'posted' else p.updated_at) | local_time('%d %b %H:%M') }}</td>
+      <td><a href="/clips/{{ c.id }}" class="post-clip">{% if c.thumb_path and not c.file_deleted_at %}<img src="/clips/{{ c.id }}/thumb" alt="" loading="lazy">{% endif %}
+        #{{ c.id }}</a> <small>{{ (c.hook_title or '') | truncate(32, True, '…') }}</small><br><small>{{ campaign_name | truncate(24, True, '…') }}</small></td>
+      <td>{{ p.platform.value }}</td>
+      <td>{{ a.handle }}</td>
+      <td>{{ p.mode or 'api' }}{% if p.attempts %} <small>(retry {{ p.attempts }})</small>{% endif %}</td>
+      <td><span class="badge badge-post-{{ p.status.value }}">{{ p.status.value }}</span></td>
+      {% if tab != 'upcoming' %}
+      <td>{% if p.visibility == 'private_locked' %}<span class="badge badge-ended" title="API project not audited">locked private</span>
+          {% elif p.visibility %}<span class="badge">{{ p.visibility }}</span>{% else %}–{% endif %}</td>
+      <td>{% if p.post_url %}<a href="{{ p.post_url }}" target="_blank" rel="noopener noreferrer">{{ 'permalink' if p.platform.value == 'instagram' else 'open' }} ↗</a>{% else %}–{% endif %}</td>
+      <td>{% if p.platform.value in ['tiktok', 'x'] and p.status.value in ['posted', 'submitted'] %}
+          <form method="post" action="/posts/{{ p.id }}/views" class="views-form"><input name="views" inputmode="numeric" value="{{ p.views or '' }}" placeholder="views" aria-label="views"><button type="submit" class="small outline">Save</button></form>
+          {% else %}{{ "{:,}".format(p.views) if p.views is not none else '–' }}{% endif %}</td>
+      <td>{{ "{:,}".format(p.likes) if p.likes is not none else '–' }}</td>
+      <td>{{ "%.2f" | format(p.earnings_est) if p.earnings_est else '–' }}</td>
+      <td><small>{{ p.last_checked_at | local_time('%d %b %H:%M') }}</small></td>
+      <td><small>{{ (p.stats_error or p.error or '–') | truncate(70, True, '…') }}</small></td>
+      {% else %}
+      <td class="actions">
+        {% for act, label in [('now', 'Post now'), ('later', '+1h'), ('tomorrow', 'Tomorrow'), ('cancel', 'Cancel')] %}
+        <form method="post" action="/posts/{{ p.id }}/{{ act }}"><button type="submit" class="small {{ 'outline secondary' if act != 'now' else '' }}">{{ label }}</button></form>
+        {% endfor %}
+      </td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+<script>
+document.querySelectorAll('.copy-btn').forEach(b => b.addEventListener('click', async () => {
+  const t = document.getElementById(b.dataset.target);
+  try { await navigator.clipboard.writeText(t.value); } catch (e) { t.select(); document.execCommand('copy'); }
+  const label = b.textContent; b.textContent = 'Copied ✓'; setTimeout(() => (b.textContent = label), 1500);
+}));
+</script>
+{% endblock %}

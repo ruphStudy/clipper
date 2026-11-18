@@ -1,11 +1,12 @@
 """SQLAlchemy 2.0 ORM models."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum as PyEnum
 from typing import Optional
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -15,6 +16,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
+    text,
     true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -58,7 +61,11 @@ class Account(Base):
     handle: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     daily_post_limit: Mapped[int] = mapped_column(Integer, default=4)
-    credentials_ref: Mapped[Optional[str]] = mapped_column(String(512))
+    credentials_ref: Mapped[Optional[str]] = mapped_column(String(512))  # token file name only, never secrets
+    channel_id: Mapped[Optional[str]] = mapped_column(String(64))
+    display_name: Mapped[Optional[str]] = mapped_column(String(255))
+    last_auth_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    auth_error: Mapped[Optional[str]] = mapped_column(String(255))
 
     posts: Mapped[list["Post"]] = relationship(back_populates="account")
 
@@ -87,8 +94,8 @@ class Campaign(Base):
     rules_text: Mapped[Optional[str]] = mapped_column(Text)
     required_hashtags: Mapped[list] = mapped_column(JSON, default=list)
     required_mentions: Mapped[list] = mapped_column(JSON, default=list)
-    clip_min_sec: Mapped[int] = mapped_column(Integer, default=15)
-    clip_max_sec: Mapped[int] = mapped_column(Integer, default=60)
+    clip_min_sec: Mapped[Optional[int]] = mapped_column(Integer)  # None = use default rules
+    clip_max_sec: Mapped[Optional[int]] = mapped_column(Integer)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -106,6 +113,16 @@ class Campaign(Base):
     burn_per_day: Mapped[Optional[float]] = mapped_column(Float)
     days_left: Mapped[Optional[float]] = mapped_column(Float)
     scored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Posting rules (None = use defaults; see app.rules.get_rules)
+    banned_words: Mapped[Optional[list]] = mapped_column(JSON)
+    post_platforms: Mapped[Optional[list]] = mapped_column(JSON)
+    caption_template: Mapped[Optional[str]] = mapped_column(Text)
+    credit_text: Mapped[Optional[str]] = mapped_column(String(255))
+    disclosure_tag: Mapped[Optional[str]] = mapped_column(String(64))
+    max_posts_per_day: Mapped[Optional[int]] = mapped_column(Integer)
+    burn_captions: Mapped[Optional[bool]] = mapped_column(Boolean)
+    language: Mapped[Optional[str]] = mapped_column(String(16))
+    rules_confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     sources: Mapped[list["Source"]] = relationship(
         back_populates="campaign", cascade="all, delete-orphan", passive_deletes=True
@@ -150,6 +167,19 @@ class Source(Base):
     duration_sec: Mapped[Optional[float]] = mapped_column(Float)
     transcript_path: Mapped[Optional[str]] = mapped_column(String(1024))
     error: Mapped[Optional[str]] = mapped_column(Text)
+    attempts: Mapped[Optional[int]] = mapped_column(Integer, default=0, server_default=text("0"))
+    next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    error_permanent: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, server_default=false())
+    downloaded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    file_deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    transcribed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    transcribe_attempts: Mapped[Optional[int]] = mapped_column(Integer, default=0, server_default=text("0"))
+    language: Mapped[Optional[str]] = mapped_column(String(16))
+    speech_ratio: Mapped[Optional[float]] = mapped_column(Float)
+    word_count: Mapped[Optional[int]] = mapped_column(Integer)
+    moments_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    moments_attempts: Mapped[Optional[int]] = mapped_column(Integer, default=0, server_default=text("0"))
+    moments_method: Mapped[Optional[str]] = mapped_column(String(16))  # "ai" | "heuristic"
 
     campaign: Mapped[Campaign] = relationship(back_populates="sources")
     clips: Mapped[list["Clip"]] = relationship(
@@ -173,6 +203,18 @@ class Clip(Base):
     moment_score: Mapped[Optional[float]] = mapped_column(Float)
     status: Mapped[ClipStatus] = mapped_column(str_enum(ClipStatus), default=ClipStatus.rendered, index=True)
     reject_reason: Mapped[Optional[str]] = mapped_column(String(512))
+    file_deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    thumb_path: Mapped[Optional[str]] = mapped_column(String(1024))
+    render_attempts: Mapped[Optional[int]] = mapped_column(Integer, default=0, server_default=text("0"))
+    duration_sec: Mapped[Optional[float]] = mapped_column(Float)
+    layout: Mapped[Optional[str]] = mapped_column(String(16))
+    rendered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    compliance: Mapped[Optional[dict]] = mapped_column(JSON)  # {"ok": bool, "errors": [], "warnings": []}
+    compliance_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    platform_captions: Mapped[Optional[dict]] = mapped_column(JSON)  # {platform: render_for_platform output}
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    edited: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, server_default=false())
 
     campaign: Mapped[Campaign] = relationship(back_populates="clips")
     source: Mapped[Source] = relationship(back_populates="clips")
@@ -200,6 +242,19 @@ class Post(Base):
     earnings_est: Mapped[float] = mapped_column(Float, default=0)
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     error: Mapped[Optional[str]] = mapped_column(Text)
+    visibility: Mapped[Optional[str]] = mapped_column(String(32))  # public | unlisted | private | private_locked
+    mode: Mapped[Optional[str]] = mapped_column(String(16))  # "api" | "manual"
+    attempts: Mapped[Optional[int]] = mapped_column(Integer, default=0, server_default=text("0"))
+    notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reminder_sent: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, server_default=false())
+    submit_alert_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    submit_reminded: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, server_default=false())
+    submit_missed: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, server_default=false())
+    alert_message_id: Mapped[Optional[int]] = mapped_column(Integer)
+    likes: Mapped[Optional[int]] = mapped_column(Integer)
+    comments: Mapped[Optional[int]] = mapped_column(Integer)
+    stats_error: Mapped[Optional[str]] = mapped_column(String(255))
+    milestone_hit: Mapped[Optional[int]] = mapped_column(Integer, default=0, server_default=text("0"))
 
     clip: Mapped[Clip] = relationship(back_populates="posts")
     account: Mapped[Account] = relationship(back_populates="posts")
@@ -218,6 +273,30 @@ class PostStat(Base):
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     post: Mapped[Post] = relationship(back_populates="stats")
+
+
+class CampaignEarning(Base):
+    """An actual payout received for a campaign (entered by the user)."""
+
+    __tablename__ = "campaign_earnings"
+
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"), index=True)
+    amount_usd: Mapped[float] = mapped_column(Float)
+    period_end: Mapped[date] = mapped_column(Date)
+    note: Mapped[Optional[str]] = mapped_column(String(255))
+
+
+class AiUsage(Base):
+    """One LLM API call (successful or not) for cost tracking."""
+
+    __tablename__ = "ai_usage"
+
+    purpose: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(64))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    ok: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class AppSetting(Base):

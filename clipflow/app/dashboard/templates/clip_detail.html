@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Clip #{{ clip.id }}{% endblock %}
+{% block content %}
+<p><a href="/clips">← Clips</a> · <a href="/campaigns/{{ clip.campaign_id }}">{{ campaign.name if campaign else 'campaign' }}</a></p>
+<h2>#{{ clip.id }} {{ clip.hook_title or '(no hook)' }}</h2>
+<div class="grid">
+  <div>
+    {% if clip.file_path and not clip.file_deleted_at %}
+    <video class="clip-video" controls playsinline preload="metadata"
+      {% if clip.thumb_path %}poster="/clips/{{ clip.id }}/thumb"{% endif %} src="/clips/{{ clip.id }}/video"></video>
+    {% else %}<p><small>Not rendered{% if clip.file_deleted_at %} (file cleaned up){% endif %}.</small></p>{% endif %}
+  </div>
+  <div>
+    <table>
+      <tbody>
+        <tr><th scope="row">Status</th><td><span class="badge">{{ clip.status.value }}</span>{% if clip.reject_reason %} <small>{{ clip.reject_reason }}</small>{% endif %}</td></tr>
+        <tr><th scope="row">Score</th><td>{{ "%.1f" | format(clip.moment_score or 0) }}</td></tr>
+        <tr><th scope="row">Source range</th><td>{{ clip.start_sec | duration }} – {{ clip.end_sec | duration }} (source #{{ clip.source_id }})</td></tr>
+        <tr><th scope="row">Duration</th><td>{{ clip.duration_sec | duration }}</td></tr>
+        <tr><th scope="row">Layout</th><td>{{ clip.layout or '–' }}</td></tr>
+        <tr><th scope="row">Rendered</th><td>{{ clip.rendered_at | local_time }}</td></tr>
+        <tr><th scope="row">File</th><td>{{ clip.file_path | filesize }}</td></tr>
+      </tbody>
+    </table>
+    <h4>Compliance {% set cs = compliance_state(clip.compliance) %}
+      {% if cs == 'ok' %}<span class="badge badge-joined">✓ ok</span>{% elif cs == 'warn' %}<span class="badge badge-paused">⚠ ok with warnings</span>
+      {% elif cs == 'error' %}<span class="badge badge-ended">✗ blocked</span>{% else %}<span class="badge">not checked</span>{% endif %}</h4>
+    {% if clip.compliance %}
+      {% if clip.compliance.errors %}<ul class="errors">{% for e in clip.compliance.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      {% if clip.compliance.warnings %}<ul class="warnings">{% for w in clip.compliance.warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+      <small>Checked {{ clip.compliance_at | local_time }}</small>
+    {% endif %}
+    <form method="post" action="/clips/{{ clip.id }}/check"><button type="submit" class="outline small">Re-check</button></form>
+    {% if clip.status.value == 'approved' %}
+    <form method="post" action="/clips/{{ clip.id }}/upload-youtube" class="upload-form">
+      {% if yt_accounts %}
+      <select name="account_id" aria-label="YouTube account">
+        {% for a in yt_accounts %}<option value="{{ a.id }}">{{ a.handle }}{% if a.auth_error %} ({{ a.auth_error }}){% endif %}</option>{% endfor %}
+      </select>
+      <button type="submit" class="small">Upload to YouTube now</button>
+      {% else %}<small>No active YouTube account — run <code>yt-auth &lt;handle&gt;</code>.</small>{% endif %}
+    </form>
+    <form method="post" action="/clips/{{ clip.id }}/upload-instagram" class="upload-form">
+      {% if ig_accounts %}
+      <select name="account_id" aria-label="Instagram account">
+        {% for a in ig_accounts %}<option value="{{ a.id }}">@{{ a.handle }}{% if a.auth_error %} ({{ a.auth_error }}){% endif %}</option>{% endfor %}
+      </select>
+      <button type="submit" class="small">Upload to Instagram now</button>
+      {% else %}<small>No active Instagram account — run <code>ig-connect &lt;token&gt;</code>.</small>{% endif %}
+    </form>
+    {% endif %}
+    {% if clip.status.value in ['approved', 'rejected'] %}
+    <form method="post" action="/clips/{{ clip.id }}/undo"><button type="submit" class="outline secondary small">Undo {{ clip.status.value }}</button></form>
+    {% elif clip.status.value == 'rendered' %}<p><a href="/review?id={{ clip.id }}" role="button" class="small">Review this clip</a></p>{% endif %}
+  </div>
+</div>
+
+{% if previews %}
+<h3>Platform captions</h3>
+<div class="grid">
+  {% for platform, fields in previews %}
+  <article>
+    <header><strong>{{ platform }}</strong></header>
+    {% for name, text, limit in fields %}
+    <p><small>{{ name }} — <span {% if text | length > limit %}class="warn-text"{% endif %}>{{ text | length }} / {{ limit }}</span></small></p>
+    <pre class="pre caption-pre">{{ text }}</pre>
+    {% endfor %}
+  </article>
+  {% endfor %}
+</div>
+{% elif clip.caption %}<h3>Caption</h3><pre class="pre caption-pre">{{ clip.caption }}</pre>{% endif %}
+{% endblock %}

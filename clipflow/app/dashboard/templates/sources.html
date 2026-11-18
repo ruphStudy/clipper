@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Sources{% endblock %}
+{% block content %}
+<h2>Sources <small>({{ rows | length }})</small></h2>
+<form method="get" action="/sources" class="filters">
+  <select name="status" aria-label="Status">
+    <option value="" {% if not status %}selected{% endif %}>all statuses</option>
+    {% for s in statuses %}<option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+</form>
+{% set sources_rows = rows %}{% set show_campaign = True %}
+{% include "_sources_table.html" %}
+{% endblock %}

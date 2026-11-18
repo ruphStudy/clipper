@@ -46,6 +46,8 @@ class SourceStatus(str, Enum):
 class ClipStatus(str, Enum):
     """Clip review/publish state."""
 
+    candidate = "candidate"  # moment picked, not rendered yet
+    rendering = "rendering"
     rendered = "rendered"
     approved = "approved"
     rejected = "rejected"
@@ -59,6 +61,7 @@ class PostStatus(str, Enum):
 
     scheduled = "scheduled"
     uploading = "uploading"
+    manual_pending = "manual_pending"  # handed to the user to post by hand
     posted = "posted"
     submitted = "submitted"
     failed = "failed"

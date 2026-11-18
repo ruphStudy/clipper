@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h2>Settings</h2>
+<h3>Default rules</h3>
+<p><small>Used for any campaign field left empty. Post platforms are chosen per campaign.</small></p>
+{% set rules_action = '/settings' %}{% set rules_submit = 'Save default rules' %}{% set show_platforms = False %}
+{% include "_rules_form.html" %}
+
+<h3 id="accounts">Accounts</h3>
+{% if accounts %}
+<table>
+  <thead><tr><th>#</th><th>Platform</th><th>Handle</th><th>Channel</th><th>Auth</th><th>Active</th></tr></thead>
+  <tbody>
+  {% for a in accounts %}
+    <tr><td>{{ a.id }}</td><td>{{ a.platform.value }}</td><td>{{ a.handle }}</td><td>{{ a.display_name or '–' }}</td>
+      <td>{% if a.auth_error %}<span class="badge badge-ended">{{ a.auth_error }}</span>{% elif a.credentials_ref %}<span class="badge badge-joined">ok</span>{% else %}–{% endif %}</td>
+      <td><form method="post" action="/accounts/{{ a.id }}/toggle"><input type="hidden" name="back" value="/settings#accounts">
+        <button type="submit" class="small {{ '' if a.is_active else 'outline' }}">{{ 'Active' if a.is_active else 'Inactive' }}</button></form></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+<p><small>Authorize a YouTube channel with <code>python -m app.main yt-auth &lt;handle&gt;</code> (opens a browser);
+  connect Instagram with <code>python -m app.main ig-connect &lt;short-lived token&gt;</code>.</small></p>
+
+<h3>Config <small>(read-only, from .env)</small></h3>
+<table>
+  <tbody>
+  {% for k, v in summary %}<tr><th scope="row">{{ k }}</th><td>{{ v }}</td></tr>{% endfor %}
+  {% for k, v in secrets %}<tr><th scope="row">{{ k }}</th>
+    <td><span class="badge {{ 'badge-joined' if v == 'SET' else 'badge-ended' }}">{{ v }}</span></td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -13,6 +13,8 @@ def _use_tmp_dirs(monkeypatch, tmp_path):
         "DOWNLOAD_DIR": tmp_path / "data" / "downloads",
         "CLIPS_DIR": tmp_path / "data" / "clips",
         "LOG_DIR": tmp_path / "data" / "logs",
+        "TRANSCRIPTS_DIR": tmp_path / "data" / "transcripts",
+        "SECRETS_DIR": tmp_path / "data" / "secrets",
     }
     for key, path in dirs.items():
         monkeypatch.setattr(config.settings, key, str(path))
